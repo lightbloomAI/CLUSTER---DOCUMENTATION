@@ -1,6 +1,5 @@
+<img src="cluster.png" width="750">
 
-
-<img src="cluster.png" height="600" width="750>
 
 
 
