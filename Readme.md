@@ -1,4 +1,4 @@
-![Ishimura first node](IMG_4931 2.png)
+![Ishimura first node](cluster.png)
 
 
 # HPC Workflow with Docker, Conda and Slurm (GPU Nodes, No System Installation)
