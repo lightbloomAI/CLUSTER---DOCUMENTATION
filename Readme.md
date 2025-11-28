@@ -1,42 +1,90 @@
 # HPC Workflow with Docker, Conda and Slurm (GPU Nodes, No System Installation)
 
-This document describes a lightweight HPC workflow for running GPU-accelerated projects (e.g., Gaussian Splatting) on a cluster:
+This document describes a lightweight HPC workflow for running GPU‑accelerated projects (e.g., Gaussian Splatting) on a cluster.
 
-- Jobs are submitted via Slurm (`sbatch`).
-- The actual work runs inside a Docker container.
-- CUDA, Conda and all dependencies live inside the container and in the user’s home area.
-- No system-wide installation or sudo is required (an admin only needs to enable Docker + GPU support on the nodes).
+The design goal is:
 
+- Users do **not** install anything system‑wide.
+- All CUDA, Conda, Python environments, and datasets live **inside Docker containers** and under each user’s `/data/users/<user>/` directory.
+- Workloads are executed via **Slurm (`sbatch`)** on GPU nodes.
+- Everything remains clean, reproducible, and scalable.
 
-## 1. Goals
+---
 
-- Run GPU jobs on an HPC cluster via Slurm.
-- Keep the host OS clean (no system-wide CUDA or Python packages).
-- Use Docker as the runtime environment.
-- Use Conda inside Docker with environments stored under the user’s directory.
-- Reuse a single Docker image and Conda cache across projects.
+## 0. Connecting to the Server
+
+You can connect **from terminal** or **using Visual Studio Code Remote SSH**.
+
+### Terminal access
+
+```
+ssh <user>@<server_ip>
+```
+
+Enter your password.
+
+If you don’t know your credentials, ask **Kevin**.
+
+---
+
+### VSCode Remote SSH (Optional)
+
+Add this to your local SSH config:
+
+```
+Host ishimura
+    HostName askForIP
+    User YourUser
+    IdentityFile ~/.ssh/id_rsa
+```
+
+Then connect:
+
+```
+ssh ishimura
+```
+
+VSCode will request your SSH password if needed.
+
+---
+
+## 1. Workspace Structure
+
+Once inside the server, navigate to your personal workspace:
+
+```
+cd /data/users/<your_user>/
+```
+
+Work **inside the `projects/` directory**:
+
+```
+cd projects
+```
+
+Clone all repositories you need:
+
+```
+git clone https://github.com/your-org/gaussian-splatting.git
+git clone https://github.com/your-org/other-project.git
+```
+
+---
 
 ## 2. Recommended Directory Structure
 
-For a user, e.g. `engineer`:
-
 ```
-/data/users/engineer/
+/data/users/<user>/
 ├── projects/
-│   └── <project_name>/
-└── gs-conda/      # persistent conda cache and environments
+│   └── gaussian-splatting/
+└── gs-conda/          # persistent conda environments and package cache
 ```
 
-Example for Gaussian Splatting:
-
-```
-/data/users/engineer/projects/gaussian-splatting
-/data/users/engineer/gs-conda
-```
+---
 
 ## 3. Dockerfile (Base Image)
 
-Create this file under your project directory:
+Create:
 
 ```
 /data/users/<user>/projects/gaussian-splatting/Dockerfile
@@ -47,7 +95,7 @@ FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y     git     wget     build-essential     cmake     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git wget build-essential cmake && rm -rf /var/lib/apt/lists/*
 
 ENV CONDA_DIR=/opt/conda
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh &&     bash /tmp/miniconda.sh -b -p $CONDA_DIR &&     rm /tmp/miniconda.sh
@@ -67,27 +115,29 @@ ENV LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 CMD ["/bin/bash"]
 ```
 
+---
+
 ## 4. Build the Docker Image
 
-Run:
-
 ```
-cd /data/users/engineer/projects/gaussian-splatting
+cd /data/users/<user>/projects/gaussian-splatting
 docker build -t gaussian-splatting-cuda .
 ```
 
-## 5. Create the Conda Cache Directory
+---
+
+## 5. Conda Cache Directory
 
 ```
-mkdir -p /data/users/engineer/gs-conda
+mkdir -p /data/users/<user>/gs-conda
 ```
 
-This gives persistent Conda environments across jobs.
+---
 
-## 6. Optional: Interactive Debugging
+## 6. Optional Interactive Run
 
 ```
-docker run --gpus all --rm -it   -v /data/users/engineer/projects/gaussian-splatting:/workspace/gaussian-splatting   -v /data/users/engineer/gs-conda:/home/appuser/.conda   gaussian-splatting-cuda
+docker run --gpus all --rm -it   -v /data/users/<user>/projects/gaussian-splatting:/workspace/gaussian-splatting   -v /data/users/<user>/gs-conda:/home/appuser/.conda   gaussian-splatting-cuda
 ```
 
 Inside:
@@ -95,24 +145,13 @@ Inside:
 ```
 cd /workspace/gaussian-splatting
 . /opt/conda/etc/profile.d/conda.sh
-conda env create --file environment.yml   # first time only
+conda env create --file environment.yml
 conda activate gaussian_splatting
 ```
 
-## 7. Creating the Conda Environment (first time only)
+---
 
-Inside the container:
-
-```
-cd /workspace/gaussian-splatting
-. /opt/conda/etc/profile.d/conda.sh
-conda env create -f environment.yml
-conda activate gaussian_splatting
-```
-
-## 8. Daily Usage
-
-Inside Docker (Slurm or interactive):
+## 7. Daily Workflow
 
 ```
 cd /workspace/gaussian-splatting
@@ -120,21 +159,27 @@ cd /workspace/gaussian-splatting
 conda activate gaussian_splatting
 ```
 
-## 9. Mount Extra Data
+---
+
+## 8. Mounting Additional Data
 
 ```
-docker run --gpus all --rm -it   -v /data/users/engineer/projects/gaussian-splatting:/workspace/gaussian-splatting   -v /data/users/engineer/gs-conda:/home/appuser/.conda   -v /data/users/engineer/data:/workspace/data   gaussian-splatting-cuda
+docker run --gpus all --rm -it   -v /data/users/<user>/projects/gaussian-splatting:/workspace/gaussian-splatting   -v /data/users/<user>/gs-conda:/home/appuser/.conda   -v /data/users/<user>/data:/workspace/data   gaussian-splatting-cuda
 ```
 
-Inside the container:
+Inside:
 
 ```
 /workspace/data/<dataset_name>
 ```
 
-## 10. HPC Integration with Slurm (sbatch + Docker)
+---
+
+## 9. HPC Integration with Slurm (sbatch + Docker)
 
 ### Example Slurm Script
+
+Create `run_gs_sbatch.sh`:
 
 ```
 #!/bin/bash
@@ -161,8 +206,47 @@ docker run --gpus all --rm   -v /data/users/engineer/projects/gaussian-splatting
   '
 ```
 
-Submit the job:
+Submit:
 
 ```
 sbatch run_gs_sbatch.sh
 ```
+
+---
+
+## 10. Optional: Dataset Extraction via AWS S3
+
+Example extractor:
+
+```
+import boto3
+
+AWS_ACCESS_KEY_ID = ""
+AWS_SECRET_ACCESS_KEY = ""
+AWS_REGION = ""
+
+s3 = boto3.client(
+    "s3",
+    region_name=AWS_REGION,
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+)
+
+def download():
+    bucket_name = "cenarius"
+    object_key = "gaussian/gaussian_data.zip"
+    local_path = "/data/users/engineer/projects/gaussian-splatting/data/gaussian_data.zip"
+
+    print("Starting download...")
+    s3.download_file(bucket_name, object_key, local_path)
+    print(f"Download finished: {local_path}")
+
+if __name__ == "__main__":
+    print("Gaussian data downloader")
+    print("------------------------")
+    download()
+    print("You can now run the training script using that data.")
+```
+
+If you need AWS configuration, ask **Zoltan**.
+
