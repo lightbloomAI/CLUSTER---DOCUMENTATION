@@ -1,3 +1,6 @@
+![Ishimura first node](IMG_4931 2.png)
+
+
 # HPC Workflow with Docker, Conda and Slurm (GPU Nodes, No System Installation)
 
 This document describes a lightweight HPC workflow for running GPU‑accelerated projects (e.g., Gaussian Splatting) on a cluster.
