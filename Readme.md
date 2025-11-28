@@ -1,6 +1,6 @@
-![Ishimura first node](cluster.png)
 
-<img src="cluster.png" height="400">
+
+<img src="cluster.png" height="600" width="750>
 
 
 
