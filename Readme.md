@@ -1,4 +1,4 @@
-<img src="cluster.png" width="750">
+<img src="clus.png" width="750">
 
 
 
